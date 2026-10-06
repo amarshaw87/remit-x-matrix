@@ -73,7 +73,6 @@ Distributed under the **MIT License**. See `LICENSE` for more information.
 ### 👨‍💻 Designed & Developed by
 
 **Amar Shaw**
-
 *Prior Authorization & RCM Specialist • Full-Stack Software Developer*
 
 *Transforming US Healthcare Operational Friction into High-Velocity Web Automation.*
