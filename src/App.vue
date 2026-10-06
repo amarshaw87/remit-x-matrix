@@ -34,7 +34,7 @@
         <button @click="handleReset" class="btn btn-secondary">Reset System Panel 🔄</button>
       </div>
     </section>
-    <!-- REPORT WORKSTATION CANVAS DISPLAY -->
+        <!-- REPORT WORKSTATION CANVAS DISPLAY -->
     <article v-if="report" class="manifest-card">
       <div class="report-header">
         <h2>📑 REMITTANCE ADVICE DETAIL REPORT</h2>
@@ -108,11 +108,19 @@
 
         <!-- REVENUE LOGIC DIRECTIVE NOTICE ALERT WORKFLOW -->
         <div v-if="report.adjustments.length > 0" class="directive-box" :class="directiveClass">
-          <p v-if="isContractualObligation">
-            💡 <strong>Operational Billing Note:</strong> The Contractual Obligation (CO) group code means the provider is contractually restricted from billing the patient for this balance. The provider must either appeal the denial using clinical evidence documentation or write off the financial variance.
+          <!-- 🛑 CASE 1: Payer Initiated Administrative Rejections (Clinic Liability) -->
+          <p v-if="triageResult === 'PI_DENIAL'">
+            ⚠️ <strong>Administrative Rejection Rule Triggered:</strong> The presence of a Payer Initiated Reduction (PI) indicator confirms an internal pre-certification failure. <strong>DO NOT invoice the patient statement ledger.</strong> Route this file immediately to your internal clinical coordination or retro-authorization lane for immediate provider appeal.
           </p>
+          
+          <!-- 💵 CASE 2: Patient Deductibles / Co-Insurance (Patient Liability) -->
+          <p v-else-if="triageResult === 'PR_LIABILITY'">
+            💵 <strong>Patient Fiscal Transfer Verified:</strong> The Patient Responsibility (PR) parameters indicate the payer has legally transferred transactional liability to the individual. You may safely generate itemized patient balance billing statements and dispatch to collection tracking paths.
+          </p>
+          
+          <!-- 💡 CASE 3: Standard Network Discounts (Contractual Adjustment write-offs) -->
           <p v-else>
-            🚨 <strong>Operational Billing Note:</strong> The Patient Responsibility (PR) parameters indicate the payer has transferred financial liability to the individual. Automatically generate itemized patient statement documents and dispatch directly to collections tracking lanes.
+            💡 <strong>Contractual Adjustment Profile:</strong> The Contractual Obligation (CO) group code means the provider is contractually restricted from billing the individual for this variance. Adjust accounts receivable parameters to record this balance as a contractual write-off discount.
           </p>
         </div>
       </div>
@@ -121,7 +129,7 @@
       <div class="section-block">
         <h3 class="section-title">🔹 ENTITY LOCATION PROFILE</h3>
         <p class="geo-text">
-          • <strong>Clearinghouse Dispatch Point Address:</strong> {{ report.city }}, {{ report.stateCode }} {{ report.zipCode }} {{ report.country }}
+          • <strong>Clearinghouse Dispatch Point Address:</strong> {{ formattedAddress }}
         </p>
       </div>
     </article>
@@ -145,16 +153,39 @@ export default defineComponent({
 
     const handleReset = () => {
       rawEdi.value = '';
-      report.value = null; // Memory-safe instant UI flush
+      report.value = null;
     };
 
-    const isContractualObligation = computed(() => {
-      if (!report.value || report.value.adjustments.length === 0) return true;
-      return report.value.adjustments[0].group.includes('Contractual');
+    // Advanced dynamic triage router evaluation loop
+    const triageResult = computed(() => {
+      if (!report.value || report.value.adjustments.length === 0) return 'CO_WRITE_OFF';
+      const adjustments = report.value.adjustments;
+      
+      const hasPiRejection = adjustments.some(adj => adj.group.includes('PI') || adj.group.startsWith('PI'));
+      if (hasPiRejection) return 'PI_DENIAL';
+      
+      const hasPrLiability = adjustments.some(adj => adj.group.includes('PR') || adj.group.startsWith('PR'));
+      if (hasPrLiability) return 'PR_LIABILITY';
+      
+      return 'CO_WRITE_OFF';
     });
 
     const directiveClass = computed(() => {
-      return isContractualObligation.value ? 'directive-co' : 'directive-pr';
+      const type = triageResult.value;
+      if (type === 'PI_DENIAL') return 'directive-pi';
+      if (type === 'PR_LIABILITY') return 'directive-pr';
+      return 'directive-co';
+    });
+
+    const formattedAddress = computed(() => {
+      if (!report.value) return 'Not Provided in EDI Stream';
+      const { city, stateCode, zipCode, country } = report.value;
+      if (!city && !stateCode) return 'Not Provided in EDI Stream';
+      
+      const baseGeo = `${city || 'N/A'}, ${stateCode || 'N/A'}`;
+      const fullZip = zipCode ? ` ${zipCode}` : '';
+      const geoCountry = country ? ` ${country}` : '';
+      return `${baseGeo}${fullZip}${geoCountry}`;
     });
 
     return {
@@ -162,8 +193,9 @@ export default defineComponent({
       report,
       handleDecode,
       handleReset,
-      isContractualObligation,
-      directiveClass
+      triageResult,
+      directiveClass,
+      formattedAddress
     };
   }
 });
@@ -179,7 +211,6 @@ export default defineComponent({
   box-sizing: border-box;
 }
 
-/* STRICT LEFT-ALIGNED INTERFACE HEADER */
 .branding-header {
   text-align: left;
   max-width: 850px;
@@ -224,33 +255,12 @@ export default defineComponent({
   letter-spacing: -0.5px;
 }
 
-.developer-profile {
-  line-height: 1.6;
-}
-  .dev-name {
-  margin: 0;
-  font-size: 14.5px;
-  color: #9ca3af;
-}
+.developer-profile { line-height: 1.6; }
+.dev-name { margin: 0; font-size: 14.5px; color: #9ca3af; }
+.text-glow { color: #ffffff; font-weight: 600; }
+.dev-role { margin: 4px 0 0 0; font-size: 12.5px; color: #4b5563; }
+.tagline { margin: 12px 0 0 0; font-size: 13px; color: #374151; }
 
-.text-glow {
-  color: #ffffff;
-  font-weight: 600;
-}
-
-.dev-role {
-  margin: 4px 0 0 0;
-  font-size: 12.5px;
-  color: #4b5563;
-}
-
-.tagline {
-  margin: 12px 0 0 0;
-  font-size: 13px;
-  color: #374151;
-}
-
-/* INPUT TERMINAL PANE WIDGET */
 .console-box {
   background-color: #0f172a;
   border: 1px solid #1e293b;
@@ -261,13 +271,7 @@ export default defineComponent({
   text-align: left;
 }
 
-.console-label {
-  display: block;
-  font-weight: bold;
-  font-size: 14px;
-  margin-bottom: 10px;
-  color: #cbd5e1;
-}
+.console-label { display: block; font-weight: bold; font-size: 14px; margin-bottom: 10px; color: #cbd5e1; }
 
 .console-input {
   width: 100%;
@@ -283,11 +287,7 @@ export default defineComponent({
   resize: vertical;
 }
 
-.action-row {
-  display: flex;
-  gap: 15px;
-  margin-top: 15px;
-}
+.action-row { display: flex; gap: 15px; margin-top: 15px; }
 
 .btn {
   padding: 10px 22px;
@@ -303,7 +303,6 @@ export default defineComponent({
 .btn-secondary { background-color: #334155; color: #cbd5e1; }
 .btn-secondary:hover { background-color: #475569; }
 
-/* DYNAMIC PRESENTATION LAYOUT DISPLAY */
 .manifest-card {
   background-color: #0f172a;
   border: 2px solid #0284c7;
@@ -333,7 +332,6 @@ export default defineComponent({
 .highlight { color: #f8fafc; font-weight: bold; }
 .neon-cyan { color: #22d3ee; font-weight: bold; }
 
-/* DATA TABLES MATRIX STYLING */
 .data-table { width: 100%; border-collapse: collapse; font-size: 13.5px; margin-top: 5px; }
 .data-table th { background-color: #1e293b; color: #94a3b8; text-align: left; padding: 10px; border: 1px solid #334155; }
 .data-table td { padding: 10px; border: 1px solid #1e293b; color: #cbd5e1; }
@@ -346,12 +344,10 @@ export default defineComponent({
 .code-tag { background-color: #312e81; color: #818cf8; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
 .desc-text { color: #94a3b8; font-size: 13px; }
 
-/* RCM RATING COMPLIANCE DIRECTIONAL BADGES */
-.directive-box { margin-top: 15px; padding: 15px; border-radius: 4px; font-size: 13px; line-height: 1.5; }
-.directive-co { background-color: #2a1215; border-left: 4px solid #ef4444; color: #fca5a5; }
-.directive-pr { background-color: #2a1b10; border-left: 4px solid #f97316; color: #fed7aa; }
+.directive-box { margin-top: 15px; padding: 15px; border-radius: 4px; font-size: 13.5px; line-height: 1.6; }
+.directive-box.directive-pi { background-color: #2d1013; border-left: 4px solid #ef4444; color: #fca5a5; }
+.directive-box.directive-pr { background-color: #0c1a30; border-left: 4px solid #3b82f6; color: #93c5fd; }
+.directive-box.directive-co { background-color: #251c0c; border-left: 4px solid #f59e0b; color: #fef08a; }
 .geo-text { font-size: 13.5px; color: #cbd5e1; margin: 0; }
 </style>
-
-
 
