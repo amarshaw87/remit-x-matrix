@@ -40,7 +40,7 @@ export function parseEdi835String(rawText: string, dictionary: Record<string, st
   }
 
   // Normalize string breaks across platform formats safely
-  const cleanInput = rawText.replace(\(/\r/\)g, '');
+  const cleanInput = rawText.replace(/\r/g, '');
   const lines = cleanInput.split(terminator);
   
   const data: Partial<ParsedReport> = { adjustments: [] };
