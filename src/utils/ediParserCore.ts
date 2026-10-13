@@ -1,4 +1,29 @@
-// UPGRADED PRODUCTION PARSER ENGINE WITH AUTOMATED BALANCING
+export interface ServiceAdjustment {
+  group: string;
+  code: string;
+  description: string;
+  amount: string;
+}
+
+export interface ParsedReport {
+  version: string;
+  claimId: string;
+  icn: string;
+  claimStatus: string;
+  filingIndicator: string;
+  adjudicationDate: string;
+  evvStatus?: string;
+  totalCharges: string;
+  allowedAmount: string;
+  paidAmount: string;
+  patientResponsibility: string;
+  adjustments: ServiceAdjustment[];
+  city: string;
+  stateCode: string;
+  zipCode: string;
+  country: string;
+}
+
 export function parseEdi835String(rawText: string, dictionary: Record<string, string>): ParsedReport | null {
   if (!rawText.trim()) return null;
 
@@ -13,13 +38,13 @@ export function parseEdi835String(rawText: string, dictionary: Record<string, st
     terminator = ':';
   }
 
+  // Clean regex formatting safely cleans out carridge returns across environments
   const cleanInput = rawText.replace(\(/\r/\)g, '');
   const lines = cleanInput.split(terminator);
   
   const data: Partial<ParsedReport> = { adjustments: [] };
   let detectedVersion = 'ASC X12 5010 Standard';
 
-  // Temporary numeric counters to ensure strict mathematical balancing
   let rawTotalCharges = 0;
   let rawPaidAmount = 0;
   let totalContractualReductions = 0;
@@ -33,12 +58,14 @@ export function parseEdi835String(rawText: string, dictionary: Record<string, st
       data.claimId = parts[1] || 'N/A';
       data.claimStatus = parts[2] === '1' ? '01 (Processed as Primary)' : parts[2] || 'N/A';
       
-      // Store raw floats for precise mathematical tracking
       rawTotalCharges = parseFloat(parts[3] || '0');
       rawPaidAmount = parseFloat(parts[4] || '0');
       
-      // Extract baseline header patient liability if present
-      totalPatientResponsibility = parseFloat(parts[5] || '0');
+      // Header-level patient liability check hook
+      const headerPR = parseFloat(parts[5] || '0');
+      if (headerPR > 0) {
+        totalPatientResponsibility += headerPR;
+      }
       
       data.filingIndicator = parts[6] ? `${parts[6]} (Preferred Provider Organization - PPO)` : 'N/A';
       data.icn = parts[7] || 'N/A';
@@ -69,14 +96,14 @@ export function parseEdi835String(rawText: string, dictionary: Record<string, st
           let cleanGroup = group;
           if (group === 'CO') {
             cleanGroup = 'CO (Contractual Obligation)';
-            totalContractualReductions += amountFloat; // Track contract write-offs
+            totalContractualReductions += amountFloat;
           }
           if (group === 'PR') {
             cleanGroup = 'PR (Patient Responsibility)';
-            totalPatientResponsibility += amountFloat; // Track patient liability
+            totalPatientResponsibility += amountFloat;
           }
 
-          const officialDescription = dictionary[code] || `Code [${code}] Detected...`;
+          const officialDescription = dictionary[code] || `Code [${code}] Detected: Official ASC X12 Adjudication Variable.`;
 
           data.adjustments?.push({
             group: cleanGroup,
@@ -99,15 +126,11 @@ export function parseEdi835String(rawText: string, dictionary: Record<string, st
     }
   });
 
-  // STEP 4: CONSOLIDATION LAYER - Computes correct ledger metrics dynamically before output
+  // Strict Consolidation Layer to compute final balances
   data.version = detectedVersion;
   data.totalCharges = rawTotalCharges.toFixed(2);
   data.paidAmount = rawPaidAmount.toFixed(2);
-  
-  // Real Allowed Amount = Total Charges minus negotiated Contractual Reductions
   data.allowedAmount = (rawTotalCharges - totalContractualReductions).toFixed(2);
-  
-  // Real Patient Responsibility accumulates all parsed PR row data fields perfectly
   data.patientResponsibility = totalPatientResponsibility.toFixed(2);
 
   return data.claimId ? (data as ParsedReport) : null;
