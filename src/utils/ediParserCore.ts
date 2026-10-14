@@ -56,6 +56,13 @@ export function parseEdi835String(rawText: string, dictionary: Record<string, st
     const segment = parts[0];
 
     if (segment === 'CLP') {
+      rawTotalCharges = 0;
+      rawPaidAmount = 0;
+      totalContractualReductions = 0;
+      headerPatientResponsibility = 0;
+      casPatientResponsibility = 0;
+      data.adjustments = [];
+      
       data.claimId = parts[1] || 'N/A';
       data.claimStatus = parts[2] === '1' ? '01 (Processed as Primary)' : parts[2] || 'N/A';
       
