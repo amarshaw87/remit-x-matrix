@@ -131,8 +131,20 @@ export function parseEdi835String(rawText: string, dictionary: Record<string, st
   data.version = detectedVersion;
   data.totalCharges = rawTotalCharges.toFixed(2);
   data.paidAmount = rawPaidAmount.toFixed(2);
-  data.allowedAmount = (rawTotalCharges - totalContractualReductions).toFixed(2);
   data.patientResponsibility = totalPatientResponsibility.toFixed(2);
+
+  // =========================================================================
+  // FIX: Dynamically calculate Allowed Amount using standard billing math
+  // =========================================================================
+  if (totalContractualReductions > 0) {
+    // If a CAS*CO segment explicitly tracks write-offs
+    data.allowedAmount = (rawTotalCharges - totalContractualReductions).toFixed(2);
+  } else {
+    // Fallback: Insurance Paid Amount + Patient Responsibility Liability
+    data.allowedAmount = (rawPaidAmount + totalPatientResponsibility).toFixed(2);
+  }
+  // =========================================================================
 
   return data.claimId ? (data as ParsedReport) : null;
 }
+
