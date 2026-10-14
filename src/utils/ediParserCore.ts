@@ -38,8 +38,8 @@ export function parseEdi835String(rawText: string, dictionary: Record<string, st
     terminator = ':';
   }
 
-  // ✅ CLEAN REGEX (Your working version reinstated)
-  const cleanInput = rawText.replace(/\r/g, '');
+  // Clean input text safely using standard regular expressions across all compilation targets
+  const cleanInput = rawText.replace(\(/\r/\)g, '');
   const lines = cleanInput.split(terminator);
   
   const data: Partial<ParsedReport> = { adjustments: [] };
@@ -48,7 +48,8 @@ export function parseEdi835String(rawText: string, dictionary: Record<string, st
   let rawTotalCharges = 0;
   let rawPaidAmount = 0;
   let totalContractualReductions = 0;
-  let totalPatientResponsibility = 0;
+  let headerPatientResponsibility = 0;
+  let casPatientResponsibility = 0;
 
   lines.forEach((line) => {
     const parts = line.split(separator).map(p => p.trim());
@@ -61,9 +62,10 @@ export function parseEdi835String(rawText: string, dictionary: Record<string, st
       rawTotalCharges = parseFloat(parts[3] || '0');
       rawPaidAmount = parseFloat(parts[4] || '0');
       
+      // Keep header-level value as a fallback variable
       const headerPR = parseFloat(parts[5] || '0');
       if (headerPR > 0) {
-        totalPatientResponsibility += headerPR;
+        headerPatientResponsibility = headerPR;
       }
       
       data.filingIndicator = parts[6] ? `${parts[6]} (Preferred Provider Organization - PPO)` : 'N/A';
@@ -101,7 +103,7 @@ export function parseEdi835String(rawText: string, dictionary: Record<string, st
             }
             if (currentGroupCode === 'PR') {
               cleanGroup = 'PR (Patient Responsibility)';
-              totalPatientResponsibility += amountFloat;
+              casPatientResponsibility += amountFloat;
             }
 
             const officialDescription = dictionary[code] || `Code [${code}] Detected: Official ASC X12 Adjudication Variable.`;
@@ -128,17 +130,20 @@ export function parseEdi835String(rawText: string, dictionary: Record<string, st
     }
   });
 
+  // Select the detailed CAS sum if available, otherwise fall back to the CLP header value
+  const finalPR = casPatientResponsibility > 0 ? casPatientResponsibility : headerPatientResponsibility;
+
   data.version = detectedVersion;
   data.totalCharges = rawTotalCharges.toFixed(2);
   data.paidAmount = rawPaidAmount.toFixed(2);
-  data.patientResponsibility = totalPatientResponsibility.toFixed(2);
+  data.patientResponsibility = finalPR.toFixed(2);
 
-  // ✅ TYPE-SAFE CALCULATED ALLOWED AMOUNT MATRIX
+  // Compute Allowed Amount ensuring balanced values across varying segment conditions
   if (totalContractualReductions > 0) {
     data.allowedAmount = (rawTotalCharges - totalContractualReductions).toFixed(2);
   } else {
     const paidNum = Number(rawPaidAmount) || 0;
-    const prNum = Number(totalPatientResponsibility) || 0;
+    const prNum = Number(finalPR) || 0;
     data.allowedAmount = (paidNum + prNum).toFixed(2);
   }
 
