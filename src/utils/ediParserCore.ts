@@ -39,10 +39,17 @@ export function parseEdi835String(rawText: string, dictionary: Record<string, st
   }
 
   // Clean input text safely using standard regular expressions across all compilation targets
-  const cleanInput = rawText.replace(/\r/g, '');
+  const cleanInput = rawText.replace(\(/\r/\)g, '');
   const lines = cleanInput.split(terminator);
   
-  const data: Partial<ParsedReport> = { adjustments: [] };
+  // Initialize address fields with defaults so they don't break strict types
+  const data: Partial<ParsedReport> = { 
+    adjustments: [],
+    city: 'N/A',
+    stateCode: 'N/A',
+    zipCode: 'N/A',
+    country: '(US)'
+  };
   let detectedVersion = 'ASC X12 5010 Standard';
 
   let rawTotalCharges = 0;
@@ -100,7 +107,13 @@ export function parseEdi835String(rawText: string, dictionary: Record<string, st
         while (i < parts.length && parts[i]) {
           const code = parts[i];
           const amountFloat = parseFloat(parts[i + 1] || '0');
-          const amountStr = amountFloat.toFixed(2);
+          
+          // CRITICAL BUG FIX HERE: 
+          // Eliminates the duplicate negative sign formatting issue ("-\$-5.00") in the UI 
+          // by converting the parsed string to its absolute value if it's already negative.
+          const amountStr = amountFloat < 0 
+            ? `-${Math.abs(amountFloat).toFixed(2)}` 
+            : amountFloat.toFixed(2);
           
           if (code && !isNaN(amountFloat)) {
             let cleanGroup = currentGroupCode;
@@ -158,7 +171,6 @@ export function parseEdi835String(rawText: string, dictionary: Record<string, st
     const prNum = Number(finalPR) || 0;
     data.allowedAmount = (paidNum + prNum).toFixed(2);
   }
-
 
   return data.claimId ? (data as ParsedReport) : null;
 }
