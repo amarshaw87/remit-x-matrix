@@ -38,11 +38,10 @@ export function parseEdi835String(rawText: string, dictionary: Record<string, st
     terminator = ':';
   }
 
-  // Clean regex formatting safely cleans out carridge returns across environments
-  const cleanInput = rawText.replace(/\r/g, '');
+  // Clean input text safely across production environments using supported global flags
+  const cleanInput = rawText.replace(\(/\r/\)g, '');
   const lines = cleanInput.split(terminator);
   
-  // THE CORRECT CASE-SENSITIVE VALUE:
   const data: Partial<ParsedReport> = { adjustments: [] };
   let detectedVersion = 'ASC X12 5010 Standard';
 
@@ -62,7 +61,7 @@ export function parseEdi835String(rawText: string, dictionary: Record<string, st
       rawTotalCharges = parseFloat(parts[3] || '0');
       rawPaidAmount = parseFloat(parts[4] || '0');
       
-      // Header-level patient liability check hook
+      // Header-level base patient liability check hook
       const headerPR = parseFloat(parts[5] || '0');
       if (headerPR > 0) {
         totalPatientResponsibility += headerPR;
@@ -86,34 +85,38 @@ export function parseEdi835String(rawText: string, dictionary: Record<string, st
     }
 
     if (segment === 'CAS') {
-      let i = 1;
-      while (i < parts.length && parts[i]) {
-        const group = parts[i];
-        const code = parts[i + 1];
-        const amountFloat = parseFloat(parts[i + 2] || '0');
-        const amountStr = amountFloat.toFixed(2);
-        
-        if (group && code) {
-          let cleanGroup = group;
-          if (group === 'CO') {
-            cleanGroup = 'CO (Contractual Obligation)';
-            totalContractualReductions += amountFloat;
-          }
-          if (group === 'PR') {
-            cleanGroup = 'PR (Patient Responsibility)';
-            totalPatientResponsibility += amountFloat;
-          }
+      const currentGroupCode = parts[1]; 
+      
+      if (currentGroupCode) {
+        let i = 2; 
+        while (i < parts.length && parts[i]) {
+          const code = parts[i];
+          const amountFloat = parseFloat(parts[i + 1] || '0');
+          const amountStr = amountFloat.toFixed(2);
+          
+          if (code && !isNaN(amountFloat)) {
+            let cleanGroup = currentGroupCode;
+            if (currentGroupCode === 'CO') {
+              cleanGroup = 'CO (Contractual Obligation)';
+              totalContractualReductions += amountFloat;
+            }
+            if (currentGroupCode === 'PR') {
+              cleanGroup = 'PR (Patient Responsibility)';
+              totalPatientResponsibility += amountFloat;
+            }
 
-          const officialDescription = dictionary[code] || `Code [${code}] Detected: Official ASC X12 Adjudication Variable.`;
+            const officialDescription = dictionary[code] || `Code [${code}] Detected: Official ASC X12 Adjudication Variable.`;
 
-          data.adjustments?.push({
-            group: cleanGroup,
-            code: code,
-            description: officialDescription,
-            amount: amountStr
-          });
+            data.adjustments?.push({
+              group: cleanGroup,
+              code: code,
+              description: officialDescription,
+              amount: amountStr
+            });
+          }
+          // Correctly positioned inside the while block to process sequential entries
+          i += 2; 
         }
-        i += 3;
       }
     }
 
@@ -127,24 +130,20 @@ export function parseEdi835String(rawText: string, dictionary: Record<string, st
     }
   });
 
-  // Strict Consolidation Layer to compute final balances
+  // Strict Consolidation Layer to compute final balances safely
   data.version = detectedVersion;
   data.totalCharges = rawTotalCharges.toFixed(2);
   data.paidAmount = rawPaidAmount.toFixed(2);
   data.patientResponsibility = totalPatientResponsibility.toFixed(2);
 
-  // =========================================================================
-  // FIX: Dynamically calculate Allowed Amount using standard billing math
-  // =========================================================================
+  // Dynamically calculate Allowed Amount using standard billing compliance logic
   if (totalContractualReductions > 0) {
-    // If a CAS*CO segment explicitly tracks write-offs
     data.allowedAmount = (rawTotalCharges - totalContractualReductions).toFixed(2);
   } else {
-    // Fallback: Insurance Paid Amount + Patient Responsibility Liability
-    data.allowedAmount = (rawPaidAmount + totalPatientResponsibility).toFixed(2);
+    const paidNum = Number(rawPaidAmount) || 0;
+    const prNum = Number(totalPatientResponsibility) || 0;
+    data.allowedAmount = (paidNum + prNum).toFixed(2);
   }
-  // =========================================================================
 
   return data.claimId ? (data as ParsedReport) : null;
 }
-
