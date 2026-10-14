@@ -39,7 +39,7 @@ export function parseEdi835String(rawText: string, dictionary: Record<string, st
   }
 
   // Clean input text safely using standard regular expressions across all compilation targets
-  const cleanInput = rawText.replace(\(/\r/\)g, '');
+  const cleanInput = rawText.replace(/\r/g, '');
   const lines = cleanInput.split(terminator);
   
   const data: Partial<ParsedReport> = { adjustments: [] };
