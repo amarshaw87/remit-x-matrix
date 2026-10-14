@@ -38,7 +38,7 @@ export function parseEdi835String(rawText: string, dictionary: Record<string, st
     terminator = ':';
   }
 
-  // Clean input text safely across production environments using supported global flags
+  // ✅ CLEAN REGEX (Your working version reinstated)
   const cleanInput = rawText.replace(\(/\r/\)g, '');
   const lines = cleanInput.split(terminator);
   
@@ -61,7 +61,6 @@ export function parseEdi835String(rawText: string, dictionary: Record<string, st
       rawTotalCharges = parseFloat(parts[3] || '0');
       rawPaidAmount = parseFloat(parts[4] || '0');
       
-      // Header-level base patient liability check hook
       const headerPR = parseFloat(parts[5] || '0');
       if (headerPR > 0) {
         totalPatientResponsibility += headerPR;
@@ -114,7 +113,6 @@ export function parseEdi835String(rawText: string, dictionary: Record<string, st
               amount: amountStr
             });
           }
-          // Correctly positioned inside the while block to process sequential entries
           i += 2; 
         }
       }
@@ -130,13 +128,12 @@ export function parseEdi835String(rawText: string, dictionary: Record<string, st
     }
   });
 
-  // Strict Consolidation Layer to compute final balances safely
   data.version = detectedVersion;
   data.totalCharges = rawTotalCharges.toFixed(2);
   data.paidAmount = rawPaidAmount.toFixed(2);
   data.patientResponsibility = totalPatientResponsibility.toFixed(2);
 
-  // Dynamically calculate Allowed Amount using standard billing compliance logic
+  // ✅ TYPE-SAFE CALCULATED ALLOWED AMOUNT MATRIX
   if (totalContractualReductions > 0) {
     data.allowedAmount = (rawTotalCharges - totalContractualReductions).toFixed(2);
   } else {
