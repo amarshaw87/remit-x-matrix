@@ -29,13 +29,17 @@ Remit-X-Matrix serves as an interactive sandbox terminal that instantly decodes 
 ### 🛠️ Project Directory Topology
 
 ```text
-src/
-├── assets/
-│   └── carcDictionary.json    # Master lookup listing containing active HIPAA reason codes
-├── utils/
-│   └── ediParserCore.ts       # Pure TypeScript algorithmic split and parsing engine
-├── App.vue                    # Parent frame orchestrating obsidian styling & reactive state
-└── main.ts                    # Vue 3 system bootstrap entry point
+Project Directory Topology
+├── package.json         # Node metadata, scripts, and runtime/dev dependencies
+├── tsconfig.json        # TypeScript strict rules and JSON module resolution configuration
+├── vite.config.ts       # Vite build configurations and path alias mappings
+└── src/
+    ├── assets/
+    │   └── carcDictionary.json  # Master lookup listing containing active HIPAA reason codes
+    ├── utils/
+    │   └── ediParserCore.ts     # Pure TypeScript algorithmic split and parsing engine
+    ├── App.vue                  # Parent frame orchestrating obsidian styling & reactive state
+    └── main.ts                  # Vue 3 system bootstrap entry point
 ```
 
 ---
