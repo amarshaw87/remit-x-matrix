@@ -39,7 +39,7 @@ export function parseEdi835String(rawText: string, dictionary: Record<string, st
   }
 
   // Clean regex formatting safely cleans out carridge returns across environments
-  const cleanInput = rawText.replaceAll('\r', '');
+  const cleanInput = rawText.replace(/\r/g, '');
   const lines = cleanInput.split(terminator);
   
   // THE CORRECT CASE-SENSITIVE VALUE:
