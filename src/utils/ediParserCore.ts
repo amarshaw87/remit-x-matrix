@@ -138,14 +138,20 @@ export function parseEdi835String(rawText: string, dictionary: Record<string, st
   data.paidAmount = rawPaidAmount.toFixed(2);
   data.patientResponsibility = finalPR.toFixed(2);
 
-  // Compute Allowed Amount ensuring balanced values across varying segment conditions
+  // Dynamically calculate Allowed Amount using standard billing compliance logic
   if (totalContractualReductions > 0) {
+    // Standard positive contractual reductions/write-offs
     data.allowedAmount = (rawTotalCharges - totalContractualReductions).toFixed(2);
+  } else if (totalContractualReductions < 0) {
+    // Negative reductions (like interest additions) should keep the original billed amount base
+    data.allowedAmount = rawTotalCharges.toFixed(2);
   } else {
+    // Fallback: Insurance Paid Amount + Patient Responsibility Liability
     const paidNum = Number(rawPaidAmount) || 0;
     const prNum = Number(finalPR) || 0;
     data.allowedAmount = (paidNum + prNum).toFixed(2);
   }
+
 
   return data.claimId ? (data as ParsedReport) : null;
 }
