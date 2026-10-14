@@ -39,7 +39,7 @@ export function parseEdi835String(rawText: string, dictionary: Record<string, st
   }
 
   // ✅ CLEAN REGEX (Your working version reinstated)
-  const cleanInput = rawText.replace(\(/\r/\)g, '');
+  const cleanInput = rawText.replace(/\r/g, '');
   const lines = cleanInput.split(terminator);
   
   const data: Partial<ParsedReport> = { adjustments: [] };
