@@ -101,7 +101,7 @@
               <td><strong>{{ adj.group }}</strong></td>
               <td><span class="code-tag">{{ adj.code }}</span></td>
               <td class="desc-text">{{ adj.description }}</td>
-              <td class="amt-risk">-${{ adj.amount }}</td>
+              <td class="amt-risk">{{ parseFloat(adj.amount) < 0 ? `-$${Math.abs(parseFloat(adj.amount)).toFixed(2)}` : `$${adj.amount}` }}</td>
             </tr>
           </tbody>
         </table>
