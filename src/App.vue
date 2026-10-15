@@ -76,19 +76,19 @@
           <tbody>
             <tr>
               <td>Total Submitted Institutional Charges</td>
-              <td class="amt-neutral">\${{ report.totalCharges }}</td>
+              <td class="amt-neutral">${{ report.totalCharges }}</td>
             </tr>
             <tr>
               <td>Contractual Allowed Amount</td>
-              <td class="amt-neutral">\${{ report.allowedAmount }}</td>
+              <td class="amt-neutral">${{ report.allowedAmount }}</td>
             </tr>
             <tr>
               <td>Provider Remitted Paid Amount</td>
-              <td class="amt-paid">\${{ report.paidAmount }}</td>
+              <td class="amt-paid">${{ report.paidAmount }}</td>
             </tr>
             <tr>
               <td>Residual Patient Responsibility Liability</td>
-              <td class="amt-patient">\${{ report.patientResponsibility }}</td>
+              <td class="amt-patient">${{ report.patientResponsibility }}</td>
             </tr>
           </tbody>
         </table>
