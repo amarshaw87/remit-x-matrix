@@ -35,10 +35,15 @@
       </div>
     </section>
 
-    <!-- REPORT WORKSTATION CANVAS DISPLAY -->
-    <article v-if="report" class="manifest-card">
+    <!-- REPORT WORKSTATION CANVAS DISPLAY (ITERATING OVER MULTIPLE ACCUMULATED CLAIMS) -->
+    <article 
+      v-for="(report, reportIdx) in reports" 
+      :key="reportIdx" 
+      class="manifest-card"
+      style="margin-bottom: 35px;"
+    >
       <div class="report-header">
-        <h2>📑 REMITTANCE ADVICE DETAIL REPORT</h2>
+        <h2>📑 REMITTANCE ADVICE DETAIL REPORT (CLAIM #{{ reportIdx + 1 }})</h2>
         <span class="spec-indicator">{{ report.version }}</span>
       </div>
 
@@ -56,10 +61,10 @@
       </div>
 
       <!-- DATA INTEGRITY ERROR BANNER PROACTIVE CHECK -->
-      <div v-if="!validationStatus.isValid" class="validation-error-banner">
+      <div v-if="!getValidationStatus(report).isValid" class="validation-error-banner">
         <span class="validation-error-title">⚠️ REMIT-X CONFORMANCE DISCREPANCY</span>
         <p class="validation-error-desc">
-          {{ validationStatus.errorMessage }}
+          {{ getValidationStatus(report).errorMessage }}
         </p>
       </div>
 
@@ -76,19 +81,19 @@
           <tbody>
             <tr>
               <td>Total Submitted Institutional Charges</td>
-              <td class="amt-neutral">${{ report.totalCharges }}</td>
+              <td class="amt-neutral">\${{ report.totalCharges }}</td>
             </tr>
             <tr>
               <td>Contractual Allowed Amount</td>
-              <td class="amt-neutral">${{ report.allowedAmount }}</td>
+              <td class="amt-neutral">\${{ report.allowedAmount }}</td>
             </tr>
             <tr>
               <td>Provider Remitted Paid Amount</td>
-              <td class="amt-paid">${{ report.paidAmount }}</td>
+              <td class="amt-paid">\${{ report.paidAmount }}</td>
             </tr>
             <tr>
               <td>Residual Patient Responsibility Liability</td>
-              <td class="amt-patient">${{ report.patientResponsibility }}</td>
+              <td class="amt-patient">\${{ report.patientResponsibility }}</td>
             </tr>
           </tbody>
         </table>
@@ -107,21 +112,24 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="(adj, index) in report.adjustments" :key="index">
+            <tr v-for="(adj, adjIdx) in report.adjustments" :key="adjIdx">
               <td><strong>{{ adj.group }}</strong></td>
               <td><span class="code-tag">{{ adj.code }}</span></td>
               <td class="desc-text">{{ adj.description }}</td>
               <td class="amt-risk">{{ parseFloat(adj.amount) < 0 ? `-$${Math.abs(parseFloat(adj.amount)).toFixed(2)}` : `$${adj.amount}` }}</td>
             </tr>
+            <tr v-if="report.adjustments.length === 0">
+              <td colspan="4" class="desc-text" style="text-align: center; padding: 15px;">No adjustments or rejections reported for this invoice block.</td>
+            </tr>
           </tbody>
         </table>
 
         <!-- REVENUE LOGIC DIRECTIVE NOTICE ALERT WORKFLOW -->
-        <div v-if="report.adjustments.length > 0" class="directive-box" :class="directiveClass">
-          <p v-if="triageResult === 'PI_DENIAL'">
+        <div v-if="report.adjustments.length > 0" class="directive-box" :class="getDirectiveClass(report)">
+          <p v-if="getTriageResult(report) === 'PI_DENIAL'">
             ⚠️ <strong>Administrative Rejection Rule Triggered:</strong> The presence of a Payer Initiated Reduction (PI) indicator confirms an internal pre-certification failure. <strong>DO NOT invoice the patient statement ledger.</strong> Route this file immediately to your internal clinical coordination or retro-authorization lane for immediate provider appeal.
           </p>
-          <p v-else-if="triageResult === 'PR_LIABILITY'">
+          <p v-else-if="getTriageResult(report) === 'PR_LIABILITY'">
             💵 <strong>Patient Fiscal Transfer Verified:</strong> The Patient Responsibility (PR) parameters indicate the payer has legally transferred transactional liability to the individual. You may safely generate itemized patient balance billing statements and dispatch to collection tracking paths.
           </p>
           <p v-else>
@@ -134,18 +142,17 @@
       <div class="section-block">
         <h3 class="section-title">🔹 ENTITY LOCATION PROFILE</h3>
         <p class="geo-text">
-          • <strong>Clearinghouse Dispatch Point Address:</strong> {{ formattedAddress }}
+          • <strong>Clearinghouse Dispatch Point Address:</strong> {{ getFormattedAddress(report) }}
         </p>
       </div>
     </article>
   </div>
 </template>
 <script lang="ts">
-import { defineComponent, ref, computed } from 'vue';
+import { defineComponent, ref } from 'vue';
 import carcDictionaryData from './assets/carcDictionary.json';
 import { parseEdi835String, ParsedReport } from './utils/ediParserCore';
 
-// Strongly-typed system validation structures
 interface ClaimValidation {
   isValid: boolean;
   variance: number;
@@ -156,28 +163,24 @@ export default defineComponent({
   name: 'App',
   setup() {
     const rawEdi = ref<string>('');
-    const report = ref<ParsedReport | null>(null);
+    const reports = ref<ParsedReport[]>([]); // Array storage maps managing multi-claim batches
     const dictionary = ref<Record<string, string>>(carcDictionaryData);
 
     const handleDecode = () => {
-      report.value = parseEdi835String(rawEdi.value, dictionary.value);
+      reports.value = parseEdi835String(rawEdi.value, dictionary.value);
     };
 
     const handleReset = () => {
       rawEdi.value = '';
-      report.value = null;
+      reports.value = [];
     };
-    // Real-time financial variance verification loop
-    const validationStatus = computed<ClaimValidation>(() => {
-      if (!report.value) return { isValid: true, variance: 0, errorMessage: '' };
+    // Multi-Claim Context Validation Method Checking Parameters per Invoice
+    const getValidationStatus = (report: ParsedReport): ClaimValidation => {
+      const submitted = parseFloat(report.totalCharges?.toString().replace(/[^0-9.-]/g, '')) || 0;
+      const paid = parseFloat(report.paidAmount?.toString().replace(/[^0-9.-]/g, '')) || 0;
+      const patient = parseFloat(report.patientResponsibility?.toString().replace(/[^0-9.-]/g, '')) || 0;
       
-      // Sanitization includes the minus sign character (-) to support negative incentive modifications
-      const submitted = parseFloat(report.value.totalCharges?.toString().replace(/[^0-9.-]/g, '')) || 0;
-      const paid = parseFloat(report.value.paidAmount?.toString().replace(/[^0-9.-]/g, '')) || 0;
-      const patient = parseFloat(report.value.patientResponsibility?.toString().replace(/[^0-9.-]/g, '')) || 0;
-      
-      const insuranceAdjustmentsSum = report.value.adjustments?.reduce((sum, adj) => {
-        // Exclude patient responsibility adjustments to prevent double-counting variables
+      const insuranceAdjustmentsSum = report.adjustments?.reduce((sum, adj) => {
         if (adj.group && !adj.group.includes('PR')) {
           return sum + (parseFloat(adj.amount?.toString().replace(/[^0-9.-]/g, '')) || 0);
         }
@@ -187,7 +190,6 @@ export default defineComponent({
       const expectedTotal = paid + patient + insuranceAdjustmentsSum;
       const variance = submitted - expectedTotal;
 
-      // Evaluates precision mapping boundaries while preventing standard floating-point discrepancies
       if (Math.abs(variance) > 0.01) {
         return {
           isValid: false,
@@ -196,11 +198,12 @@ export default defineComponent({
         };
       }
       return { isValid: true, variance: 0, errorMessage: '' };
-    });
-    // Advanced dynamic triage router evaluation loop
-    const triageResult = computed(() => {
-      if (!report.value || report.value.adjustments.length === 0) return 'CO_WRITE_OFF';
-      const adjustments = report.value.adjustments;
+    };
+
+    // Contextual Triage Classifier Router Mapping Rules per Record
+    const getTriageResult = (report: ParsedReport): string => {
+      if (!report.adjustments || report.adjustments.length === 0) return 'CO_WRITE_OFF';
+      const adjustments = report.adjustments;
       
       const hasPiRejection = adjustments.some(adj => adj.group.includes('PI') || adj.group.startsWith('PI'));
       if (hasPiRejection) return 'PI_DENIAL';
@@ -211,17 +214,16 @@ export default defineComponent({
       return 'CO_WRITE_OFF';
     });
 
-    const directiveClass = computed(() => {
-      const type = triageResult.value;
+    const getDirectiveClass = (report: ParsedReport): string => {
+      const type = getTriageResult(report);
       if (type === 'PI_DENIAL') return 'directive-pi';
       if (type === 'PR_LIABILITY') return 'directive-pr';
       return 'directive-co';
-    });
+    };
 
-    // Fixed string formatting logic resolving both the comma and parenthesis constraints
-    const formattedAddress = computed(() => {
-      if (!report.value) return 'Not Provided in EDI Stream';
-      const { city, stateCode, zipCode, country } = report.value;
+    // Location Formatting String Mapper per Elements Record
+    const getFormattedAddress = (report: ParsedReport): string => {
+      const { city, stateCode, zipCode, country } = report;
       if (!city && !stateCode && !zipCode) return 'Not Provided in EDI Stream';
       
       const cleanCity = city?.trim() || 'N/A';
@@ -230,17 +232,17 @@ export default defineComponent({
       const cleanCountry = country?.trim() || 'US';
 
       return `${cleanCity}, ${cleanState}, ${cleanZip} (${cleanCountry.replace(/[()]/g, '')})`;
-    });
+    };
 
     return {
       rawEdi,
-      report,
+      reports,
       handleDecode,
       handleReset,
-      validationStatus,
-      triageResult,
-      directiveClass,
-      formattedAddress
+      getValidationStatus,
+      getTriageResult,
+      getDirectiveClass,
+      getFormattedAddress
     };
   }
 });
@@ -410,7 +412,6 @@ export default defineComponent({
 .amt-patient { font-weight: bold; color: #f97316; }
 .amt-risk { font-weight: bold; color: #f87171; }
 .code-tag { background-color: #312e81; color: #818cf8; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
-.close-tag { display: none; }
 .desc-text { color: #94a3b8; font-size: 13px; }
 
 .directive-box { margin-top: 15px; padding: 15px; border-radius: 4px; font-size: 13.5px; line-height: 1.6; }
