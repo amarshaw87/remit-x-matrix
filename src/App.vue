@@ -213,6 +213,7 @@ export default defineComponent({
     });
 
     // Fixed string formatting logic resolving the missing comma spacing constraint
+        // Fixed string formatting logic resolving both the comma and parenthesis constraints
     const formattedAddress = computed(() => {
       if (!report.value) return 'Not Provided in EDI Stream';
       const { city, stateCode, zipCode, country } = report.value;
@@ -223,7 +224,7 @@ export default defineComponent({
       const cleanZip = zipCode?.trim() || 'N/A';
       const cleanCountry = country?.trim() || 'US';
 
-      return `${cleanCity}, ${cleanState}, ${cleanZip} (${cleanCountry})`;
+      return `${cleanCity}, ${cleanState}, ${cleanZip} (${cleanCountry.replace(/[()]/g, '')})`;
     });
 
     return {
