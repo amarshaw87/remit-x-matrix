@@ -174,7 +174,6 @@ export default defineComponent({
       rawEdi.value = '';
       reports.value = [];
     };
-    // Multi-Claim Context Validation Method Checking Parameters per Invoice
     const getValidationStatus = (report: ParsedReport): ClaimValidation => {
       const submitted = parseFloat(report.totalCharges?.toString().replace(/[^0-9.-]/g, '')) || 0;
       const paid = parseFloat(report.paidAmount?.toString().replace(/[^0-9.-]/g, '')) || 0;
@@ -199,7 +198,6 @@ export default defineComponent({
       }
       return { isValid: true, variance: 0, errorMessage: '' };
     };
-    // Contextual Triage Classifier Router Mapping Rules per Record
     const getTriageResult = (report: ParsedReport): string => {
       if (!report.adjustments || report.adjustments.length === 0) return 'CO_WRITE_OFF';
       const adjustments = report.adjustments;
@@ -211,7 +209,7 @@ export default defineComponent({
       if (hasPrLiability) return 'PR_LIABILITY';
       
       return 'CO_WRITE_OFF';
-    });
+    };
 
     const getDirectiveClass = (report: ParsedReport): string => {
       const type = getTriageResult(report);
@@ -220,9 +218,12 @@ export default defineComponent({
       return 'directive-co';
     };
 
-    // Location Formatting String Mapper per Elements Record
     const getFormattedAddress = (report: ParsedReport): string => {
-      const { city, stateCode, zipCode, country } = report;
+      const city = report.city;
+      const stateCode = report.stateCode;
+      const zipCode = report.zipCode;
+      const country = report.country;
+      
       if (!city && !stateCode && !zipCode) return 'Not Provided in EDI Stream';
       
       const cleanCity = city?.trim() || 'N/A';
