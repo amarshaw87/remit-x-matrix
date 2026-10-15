@@ -76,19 +76,19 @@
           <tbody>
             <tr>
               <td>Total Submitted Institutional Charges</td>
-              <td class="amt-neutral">${{ report.totalCharges }}</td>
+              <td class="amt-neutral">\${{ report.totalCharges }}</td>
             </tr>
             <tr>
               <td>Contractual Allowed Amount</td>
-              <td class="amt-neutral">${{ report.allowedAmount }}</td>
+              <td class="amt-neutral">\${{ report.allowedAmount }}</td>
             </tr>
             <tr>
               <td>Provider Remitted Paid Amount</td>
-              <td class="amt-paid">${{ report.paidAmount }}</td>
+              <td class="amt-paid">\${{ report.paidAmount }}</td>
             </tr>
             <tr>
               <td>Residual Patient Responsibility Liability</td>
-              <td class="amt-patient">${{ report.patientResponsibility }}</td>
+              <td class="amt-patient">\${{ report.patientResponsibility }}</td>
             </tr>
           </tbody>
         </table>
@@ -171,14 +171,15 @@ export default defineComponent({
     const validationStatus = computed<ClaimValidation>(() => {
       if (!report.value) return { isValid: true, variance: 0, errorMessage: '' };
       
-      const submitted = parseFloat(report.value.totalCharges?.toString().replace(/[^0-9.]/g, '')) || 0;
-      const paid = parseFloat(report.value.paidAmount?.toString().replace(/[^0-9.]/g, '')) || 0;
-      const patient = parseFloat(report.value.patientResponsibility?.toString().replace(/[^0-9.]/g, '')) || 0;
+      // Sanitization includes the minus sign character (-) to support negative incentive modifications
+      const submitted = parseFloat(report.value.totalCharges?.toString().replace(/[^0-9.-]/g, '')) || 0;
+      const paid = parseFloat(report.value.paidAmount?.toString().replace(/[^0-9.-]/g, '')) || 0;
+      const patient = parseFloat(report.value.patientResponsibility?.toString().replace(/[^0-9.-]/g, '')) || 0;
       
       const insuranceAdjustmentsSum = report.value.adjustments?.reduce((sum, adj) => {
-        // Capture CO, PI, and any other insurance write-offs/rejections (excluding PR to prevent double counting)
-        if (!adj.group.includes('PR') && !adj.group.startsWith('PR')) {
-          return sum + (parseFloat(adj.amount?.toString().replace(/[^0-9.]/g, '')) || 0);
+        // Exclude patient responsibility adjustments to prevent double-counting variables
+        if (adj.group && !adj.group.includes('PR')) {
+          return sum + (parseFloat(adj.amount?.toString().replace(/[^0-9.-]/g, '')) || 0);
         }
         return sum;
       }, 0) || 0;
@@ -186,6 +187,7 @@ export default defineComponent({
       const expectedTotal = paid + patient + insuranceAdjustmentsSum;
       const variance = submitted - expectedTotal;
 
+      // Evaluates precision mapping boundaries while preventing standard floating-point discrepancies
       if (Math.abs(variance) > 0.01) {
         return {
           isValid: false,
@@ -216,8 +218,7 @@ export default defineComponent({
       return 'directive-co';
     });
 
-    // Fixed string formatting logic resolving the missing comma spacing constraint
-        // Fixed string formatting logic resolving both the comma and parenthesis constraints
+    // Fixed string formatting logic resolving both the comma and parenthesis constraints
     const formattedAddress = computed(() => {
       if (!report.value) return 'Not Provided in EDI Stream';
       const { city, stateCode, zipCode, country } = report.value;
@@ -409,6 +410,7 @@ export default defineComponent({
 .amt-patient { font-weight: bold; color: #f97316; }
 .amt-risk { font-weight: bold; color: #f87171; }
 .code-tag { background-color: #312e81; color: #818cf8; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
+.close-tag { display: none; }
 .desc-text { color: #94a3b8; font-size: 13px; }
 
 .directive-box { margin-top: 15px; padding: 15px; border-radius: 4px; font-size: 13.5px; line-height: 1.6; }
