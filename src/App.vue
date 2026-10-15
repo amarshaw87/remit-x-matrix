@@ -34,7 +34,8 @@
         <button @click="handleReset" class="btn btn-secondary">Reset System Panel 🔄</button>
       </div>
     </section>
-        <!-- REPORT WORKSTATION CANVAS DISPLAY -->
+
+    <!-- REPORT WORKSTATION CANVAS DISPLAY -->
     <article v-if="report" class="manifest-card">
       <div class="report-header">
         <h2>📑 REMITTANCE ADVICE DETAIL REPORT</h2>
@@ -54,6 +55,14 @@
         </ul>
       </div>
 
+      <!-- DATA INTEGRITY ERROR BANNER PROACTIVE CHECK -->
+      <div v-if="!validationStatus.isValid" class="validation-error-banner">
+        <span class="validation-error-title">⚠️ REMIT-X CONFORMANCE DISCREPANCY</span>
+        <p class="validation-error-desc">
+          {{ validationStatus.errorMessage }}
+        </p>
+      </div>
+
       <!-- SECTION B: FINANCIAL ACCOUNTING GRID -->
       <div class="section-block">
         <h3 class="section-title">🔹 FINANCIAL SUMMARY</h3>
@@ -67,23 +76,24 @@
           <tbody>
             <tr>
               <td>Total Submitted Institutional Charges</td>
-              <td class="amt-neutral">${{ report.totalCharges }}</td>
+              <td class="amt-neutral">\${{ report.totalCharges }}</td>
             </tr>
             <tr>
               <td>Contractual Allowed Amount</td>
-              <td class="amt-neutral">${{ report.allowedAmount }}</td>
+              <td class="amt-neutral">\${{ report.allowedAmount }}</td>
             </tr>
             <tr>
               <td>Provider Remitted Paid Amount</td>
-              <td class="amt-paid">${{ report.paidAmount }}</td>
+              <td class="amt-paid">\${{ report.paidAmount }}</td>
             </tr>
             <tr>
               <td>Residual Patient Responsibility Liability</td>
-              <td class="amt-patient">${{ report.patientResponsibility }}</td>
+              <td class="amt-patient">\${{ report.patientResponsibility }}</td>
             </tr>
           </tbody>
         </table>
       </div>
+
       <!-- SECTION C: TRANS-ADJUDICATION CODES CHECK -->
       <div class="section-block">
         <h3 class="section-title">🔹 ADJUDICATION & ADJUSTMENT DETAILS</h3>
@@ -108,17 +118,12 @@
 
         <!-- REVENUE LOGIC DIRECTIVE NOTICE ALERT WORKFLOW -->
         <div v-if="report.adjustments.length > 0" class="directive-box" :class="directiveClass">
-          <!-- 🛑 CASE 1: Payer Initiated Administrative Rejections (Clinic Liability) -->
           <p v-if="triageResult === 'PI_DENIAL'">
             ⚠️ <strong>Administrative Rejection Rule Triggered:</strong> The presence of a Payer Initiated Reduction (PI) indicator confirms an internal pre-certification failure. <strong>DO NOT invoice the patient statement ledger.</strong> Route this file immediately to your internal clinical coordination or retro-authorization lane for immediate provider appeal.
           </p>
-          
-          <!-- 💵 CASE 2: Patient Deductibles / Co-Insurance (Patient Liability) -->
           <p v-else-if="triageResult === 'PR_LIABILITY'">
             💵 <strong>Patient Fiscal Transfer Verified:</strong> The Patient Responsibility (PR) parameters indicate the payer has legally transferred transactional liability to the individual. You may safely generate itemized patient balance billing statements and dispatch to collection tracking paths.
           </p>
-          
-          <!-- 💡 CASE 3: Standard Network Discounts (Contractual Adjustment write-offs) -->
           <p v-else>
             💡 <strong>Contractual Adjustment Profile:</strong> The Contractual Obligation (CO) group code means the provider is contractually restricted from billing the individual for this variance. Adjust accounts receivable parameters to record this balance as a contractual write-off discount.
           </p>
@@ -140,6 +145,13 @@ import { defineComponent, ref, computed } from 'vue';
 import carcDictionaryData from './assets/carcDictionary.json';
 import { parseEdi835String, ParsedReport } from './utils/ediParserCore';
 
+// Strongly-typed system validation structures
+interface ClaimValidation {
+  isValid: boolean;
+  variance: number;
+  errorMessage: string;
+}
+
 export default defineComponent({
   name: 'App',
   setup() {
@@ -155,7 +167,30 @@ export default defineComponent({
       rawEdi.value = '';
       report.value = null;
     };
+    // Real-time financial variance verification loop
+    const validationStatus = computed<ClaimValidation>(() => {
+      if (!report.value) return { isValid: true, variance: 0, errorMessage: '' };
+      
+      const submitted = parseFloat(report.value.totalCharges?.toString().replace(/[^0-9.]/g, '')) || 0;
+      const paid = parseFloat(report.value.paidAmount?.toString().replace(/[^0-9.]/g, '')) || 0;
+      const patient = parseFloat(report.value.patientResponsibility?.toString().replace(/[^0-9.]/g, '')) || 0;
+      
+      const adjustmentsSum = report.value.adjustments?.reduce((sum, adj) => {
+        return sum + (parseFloat(adj.amount?.toString().replace(/[^0-9.]/g, '')) || 0);
+      }, 0) || 0;
 
+      const expectedTotal = paid + patient + adjustmentsSum;
+      const variance = submitted - expectedTotal;
+
+      if (Math.abs(variance) > 0.01) {
+        return {
+          isValid: false,
+          variance: variance,
+          errorMessage: `Financial Ledger Balancing Variance Flagged: Unexplained discrepancy of $${variance.toFixed(2)} discovered. Total accounted variables ($${paid.toFixed(2)} paid + $${patient.toFixed(2)} liability) fail to reconcile against the total submitted value ($${submitted.toFixed(2)}).`
+        };
+      }
+      return { isValid: true, variance: 0, errorMessage: '' };
+    });
     // Advanced dynamic triage router evaluation loop
     const triageResult = computed(() => {
       if (!report.value || report.value.adjustments.length === 0) return 'CO_WRITE_OFF';
@@ -177,15 +212,18 @@ export default defineComponent({
       return 'directive-co';
     });
 
+    // Fixed string formatting logic resolving the missing comma spacing constraint
     const formattedAddress = computed(() => {
       if (!report.value) return 'Not Provided in EDI Stream';
       const { city, stateCode, zipCode, country } = report.value;
-      if (!city && !stateCode) return 'Not Provided in EDI Stream';
+      if (!city && !stateCode && !zipCode) return 'Not Provided in EDI Stream';
       
-      const baseGeo = `${city || 'N/A'}, ${stateCode || 'N/A'}`;
-      const fullZip = zipCode ? ` ${zipCode}` : '';
-      const geoCountry = country ? ` ${country}` : '';
-      return `${baseGeo}${fullZip}${geoCountry}`;
+      const cleanCity = city?.trim() || 'N/A';
+      const cleanState = stateCode?.trim() || 'N/A';
+      const cleanZip = zipCode?.trim() || 'N/A';
+      const cleanCountry = country?.trim() ? `(${country.trim()})` : '(US)';
+
+      return `${cleanCity}, ${cleanState}, ${cleanZip} ${cleanCountry}`;
     });
 
     return {
@@ -193,6 +231,7 @@ export default defineComponent({
       report,
       handleDecode,
       handleReset,
+      validationStatus,
       triageResult,
       directiveClass,
       formattedAddress
@@ -332,6 +371,29 @@ export default defineComponent({
 .highlight { color: #f8fafc; font-weight: bold; }
 .neon-cyan { color: #22d3ee; font-weight: bold; }
 
+/* ERROR COMPLIANCE RECONCILIATION STYLE PACK */
+.validation-error-banner {
+  background-color: rgba(239, 68, 68, 0.12); 
+  border-left: 4px solid #ef4444; 
+  padding: 15px; 
+  margin-bottom: 25px; 
+  border-radius: 4px;
+}
+.validation-error-title {
+  color: #f87171; 
+  font-weight: bold; 
+  display: block; 
+  margin-bottom: 5px; 
+  font-size: 14px;
+  letter-spacing: 0.3px;
+}
+.validation-error-desc {
+  color: #fca5a5; 
+  margin: 0; 
+  font-size: 13.5px; 
+  line-height: 1.5;
+}
+
 .data-table { width: 100%; border-collapse: collapse; font-size: 13.5px; margin-top: 5px; }
 .data-table th { background-color: #1e293b; color: #94a3b8; text-align: left; padding: 10px; border: 1px solid #334155; }
 .data-table td { padding: 10px; border: 1px solid #1e293b; color: #cbd5e1; }
@@ -350,4 +412,3 @@ export default defineComponent({
 .directive-box.directive-co { background-color: #251c0c; border-left: 4px solid #f59e0b; color: #fef08a; }
 .geo-text { font-size: 13.5px; color: #cbd5e1; margin: 0; }
 </style>
-
