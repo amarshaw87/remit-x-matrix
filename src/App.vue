@@ -175,15 +175,15 @@ export default defineComponent({
       const paid = parseFloat(report.value.paidAmount?.toString().replace(/[^0-9.]/g, '')) || 0;
       const patient = parseFloat(report.value.patientResponsibility?.toString().replace(/[^0-9.]/g, '')) || 0;
       
-      const contractualSum = report.value.adjustments?.reduce((sum, adj) => {
-        if (adj.group.includes('Contractual Obligation')) {
+      const insuranceAdjustmentsSum = report.value.adjustments?.reduce((sum, adj) => {
+        // Capture CO, PI, and any other insurance write-offs/rejections (excluding PR to prevent double counting)
+        if (!adj.group.includes('PR') && !adj.group.startsWith('PR')) {
           return sum + (parseFloat(adj.amount?.toString().replace(/[^0-9.]/g, '')) || 0);
         }
         return sum;
       }, 0) || 0;
 
-      const expectedTotal = paid + patient + contractualSum;
-
+      const expectedTotal = paid + patient + insuranceAdjustmentsSum;
       const variance = submitted - expectedTotal;
 
       if (Math.abs(variance) > 0.01) {
