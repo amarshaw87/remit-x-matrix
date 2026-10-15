@@ -163,7 +163,7 @@ export default defineComponent({
   name: 'App',
   setup() {
     const rawEdi = ref<string>('');
-    const reports = ref<ParsedReport[]>([]); // Array storage maps managing multi-claim batches
+    const reports = ref<ParsedReport[]>([]);
     const dictionary = ref<Record<string, string>>(carcDictionaryData);
 
     const handleDecode = () => {
@@ -199,7 +199,6 @@ export default defineComponent({
       }
       return { isValid: true, variance: 0, errorMessage: '' };
     };
-
     // Contextual Triage Classifier Router Mapping Rules per Record
     const getTriageResult = (report: ParsedReport): string => {
       if (!report.adjustments || report.adjustments.length === 0) return 'CO_WRITE_OFF';
