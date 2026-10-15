@@ -175,11 +175,15 @@ export default defineComponent({
       const paid = parseFloat(report.value.paidAmount?.toString().replace(/[^0-9.]/g, '')) || 0;
       const patient = parseFloat(report.value.patientResponsibility?.toString().replace(/[^0-9.]/g, '')) || 0;
       
-      const adjustmentsSum = report.value.adjustments?.reduce((sum, adj) => {
-        return sum + (parseFloat(adj.amount?.toString().replace(/[^0-9.]/g, '')) || 0);
+      const contractualSum = report.value.adjustments?.reduce((sum, adj) => {
+        if (adj.group.includes('Contractual Obligation')) {
+          return sum + (parseFloat(adj.amount?.toString().replace(/[^0-9.]/g, '')) || 0);
+        }
+        return sum;
       }, 0) || 0;
 
-      const expectedTotal = paid + patient + adjustmentsSum;
+      const expectedTotal = paid + patient + contractualSum;
+
       const variance = submitted - expectedTotal;
 
       if (Math.abs(variance) > 0.01) {
